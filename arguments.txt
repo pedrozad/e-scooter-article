@@ -1,0 +1,16 @@
+-s=10
+-m=Melilla
+-pm=0.050
+-pc=0.700
+-GEN=50
+-POB=32
+-CPUS=32
+-a=NSGA3
+-f=over_all_base_Melilla.csv
+-show_ind
+-v
+-mut=CONNECTIVITY_PROB_DIVIDED
+-type_reference=energy
+-np=32
+-prob_neighbor_mating=0.8
+-n_neighbors=4
