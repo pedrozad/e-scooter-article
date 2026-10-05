@@ -1,0 +1,31 @@
+Bootstrap: docker
+From: continuumio/miniconda3
+
+%files
+    environment_cluster.yml /environment_cluster.yml
+
+%post
+    # Configurar conda
+    conda config --add channels conda-forge
+    conda config --set channel_priority strict
+    conda update -y conda
+
+    # Debug: comprobar que el archivo existe
+    ls -l /environment_cluster.yml
+    cat /environment_cluster.yml
+
+    # Crear el entorno
+    conda env create -f /environment_cluster.yml
+
+    # Activar por defecto
+    echo 'source /opt/conda/etc/profile.d/conda.sh' >> /.bashrc
+    echo 'conda activate env310_journal' >> /.bashrc
+
+%environment
+    source /opt/conda/etc/profile.d/conda.sh
+    conda activate env310_journal
+    export CONDA_DEFAULT_ENV=env310_journal
+    export PATH=/opt/conda/envs/env310_journal/bin:$PATH
+
+%runscript
+    exec python "$@"

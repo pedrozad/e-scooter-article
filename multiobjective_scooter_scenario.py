@@ -44,6 +44,8 @@ from pymoo.operators.crossover.pntx import TwoPointCrossover
 
 # Binary Sampling
 from sampling import BinaryRandomSamplingCustom
+from sampling import CombinationThreeKnowledgeSampling, DemandKnowledgeSampling, MultimodalKnowledgeSampling, ConnectivityKnowledgeSampling
+
 
 # Parallel Slave-Master
 from pymoo.core.problem import StarmapParallelization
@@ -54,9 +56,16 @@ from pymoo.core.population import Population
 
 # Mutation types
 from pymoo.operators.mutation.bitflip import BitflipMutation
-from mutation import MultimodalMutation
+from mutation import CombinatedMutation, MultimodalMutation
 from mutation import ConnectivityMutationProbabilityDivided
 from mutation import AttentionUseMutationFlip
+
+# Baselines
+from mutation import GraphLocalActionMatchedRandomMutation_Connectivity
+from mutation import GraphLocalActionMatchedRandomMutation_Demand
+from mutation import GraphLocalActionMatchedRandomMutation_Multimodal
+from mutation import SwapMutation
+
 
 MALAGA_SCENARIO = "Malaga-Subway"
 MELILLA_SCENARIO = "Melilla"
@@ -590,7 +599,10 @@ class FileOutput(Output):
 
     def update(self, algorithm):
         super().update(algorithm)
-        
+
+        print(f"Gen {algorithm.n_gen}: pop size = {len(algorithm.pop)}")
+        print(f"F shape: {algorithm.pop.get('F').shape}")
+
         if(self.show_ind):
             columns_fitness = self.headers[1:-1]
         else:
@@ -721,8 +733,11 @@ if __name__ == "__main__":
                         default=0.7)
 
 
-    
-    
+    parser.add_argument("-sampling", type=str, required=False, help="Type of mutation",
+                            choices=["custom_random", "random", "all_knowledge",
+                                   "con_knowledge", "mod_knowledge", "dem_knowledge"],
+                            default="custom_random")
+
     # parser.add_argument("-algorithm", "-algo", "-a",
     #                     type=str,
     #                     choices=['NSGA2', 'SPEA2', 'nsga2', 'spea2','MOEAD','moead', 'RS', 'rs'],
@@ -747,10 +762,10 @@ if __name__ == "__main__":
                                  "connectivity","CONNECTIVITY",
                                  "connectivity_prob_divided_or_flip","CONNECTIVITY_PROB_DIVIDED_OR_FLIP",
                                  "connectivity_prob_divided","CONNECTIVITY_PROB_DIVIDED",
-                                 "multimodalidad","MULTIMODALIDAD"],
+                                 "multimodalidad","MULTIMODALIDAD","GRL_MOD", "GRL_DEM", "GRL_CON", "MBF_MOD_DEM_CON", "SWAP"],
                         default='multiflip', required=False,
                         help='Choose algorithms between options')
-
+    parser.add_argument("-suffix", required=False, help="Change suffix folder result")
     start_time_stamp = time.time() 
     print(f'Started at {time.strftime("%H:%M:%S %d-%m-%Y",  time.gmtime(start_time_stamp))}')
     args = parser.parse_args()
@@ -780,8 +795,11 @@ if __name__ == "__main__":
     data_path = base_path + '/data-osm/'
     data_path = data_path + SCENARIO + '/'
 
+    suffix = arguments["suffix"]
+    if suffix is None:
+        suffix = ""
 
-    results_path = base_path + "/results/" + SCENARIO + "/" + "results-multiobjective/"
+    results_path = base_path + "/results/" + SCENARIO + "/" + suffix + "/" + "results-multiobjective/"
     images = results_path + "images/"
     map_path = data_path + "/maps/"
 
@@ -940,7 +958,8 @@ if __name__ == "__main__":
 
     type_mutation = arguments["mut"].upper()
 
-    
+    sampling_type = arguments["sampling"]
+    print("Sampling type: {}".format(sampling_type), flush=True)
     # initialize the multiprocessing pool and create the runner
     with multiprocessing.Pool(cpus) as pool:
         # n_proccess =4
@@ -951,14 +970,14 @@ if __name__ == "__main__":
 
         time_stamp = time.time() 
         if(algorithm_choice == "NSGA2"):
-            filename = '-PYMOO-{}-{}-{}-{}-{:01.3f}-{:2.3f}-{}-{}-{}-{}-{}'.format(
-            SCENARIO, SEED, NGEN, MU, CXPB, MUFLIP, cpus, algorithm_choice, type_mutation,\
+            filename = '-PYMOO-{}-{}-{}-{}-{:01.3f}-{:2.3f}-{}-{}-{}-{}-{}-{}'.format(
+            SCENARIO, SEED, NGEN, MU, CXPB, MUFLIP, cpus, algorithm_choice, type_mutation, sampling_type,\
             (time.strftime("%Y-%m-%d_%H-%M-%S",  time.gmtime(time_stamp))),
             sys.platform)
         else:
-            filename = '-PYMOO-{}-{}-{}-{}-{:01.3f}-{:2.3f}-{}-{}-{}-{}-{:0.3f}-{}-{}-{}-{}'.format(
+            filename = '-PYMOO-{}-{}-{}-{}-{:01.3f}-{:2.3f}-{}-{}-{}-{}-{:0.3f}-{}-{}-{}-{}-{}'.format(
             SCENARIO, SEED, NGEN, MU, CXPB, MUFLIP, cpus, algorithm_choice,\
-            type_reference,prob_neighbor_mating,n_neighbors, n_p,type_mutation,\
+            type_reference,prob_neighbor_mating,n_neighbors, n_p,type_mutation,sampling_type,\
             (time.strftime("%Y-%m-%d_%H-%M-%S",  time.gmtime(time_stamp))),
             sys.platform)
             
@@ -969,14 +988,24 @@ if __name__ == "__main__":
         print(file_path, flush=True)
         
         print("Pre Sampling - depending of algorithmChoice", flush=True)
-        sampling = BinaryRandomSamplingCustom(df_new_individuals)
         
+        if (sampling_type == "custom_random"):
+            sampling = BinaryRandomSamplingCustom(df_new_individuals)
+        elif (sampling_type == "all_knowledge"):
+            sampling = CombinationThreeKnowledgeSampling(df_new_individuals, G, dict_of_search_space_u_v,dict_of_search_space_uvk_to_pos,LEN_SEARCH_SPACE,TIME_WEIGHT, LIST_PAIR_OD)
+        elif (sampling_type == "con_knowledge"):
+            sampling = ConnectivityKnowledgeSampling(df_new_individuals, G, dict_of_search_space_u_v,dict_of_search_space_uvk_to_pos,LEN_SEARCH_SPACE,TIME_WEIGHT, LIST_PAIR_OD)
+        elif (sampling_type == "mod_knowledge"):
+            sampling = MultimodalKnowledgeSampling(df_new_individuals, G, dict_of_search_space_u_v,dict_of_search_space_uvk_to_pos,LEN_SEARCH_SPACE,TIME_WEIGHT, LIST_PAIR_OD)
+        elif (sampling_type == "dem_knowledge"):
+            sampling = DemandKnowledgeSampling(df_new_individuals, G, dict_of_search_space_u_v,dict_of_search_space_uvk_to_pos,LEN_SEARCH_SPACE,TIME_WEIGHT, LIST_PAIR_OD)
+        else:
+            # elif (sampling_type == "random"):
+            sys.error(f"Sampling type {sampling_type} not implemented")
         ## Integrate biased ind
         if (algorithm_choice == "NSGA2"):
-            X = sampling._first_one(problem=problem, n_samples=MU)
+            n_samples = MU
         else:
-            # (algorithm_choice == "MOEAD"):
-            # ndim => number of objectives == 3
             if (type_reference == "uniform"):
                 # n_dim, n_partitions
                 ref_dirs = get_reference_directions(type_reference, n_dim=NUMBER_OBJECTIVES, n_partitions=n_p, seed=SEED)
@@ -986,13 +1015,39 @@ if __name__ == "__main__":
                 # n_dim, n_points
                 ref_dirs = get_reference_directions(type_reference, n_dim=NUMBER_OBJECTIVES, n_points=n_p, seed=SEED)
 
-            # Thinking that maybe is the size of the sampling is less than the population size
-            # This implementation takes pop_size the len of ref_dirs, that is the combination
-            # of n_p over n_dim, therefore the argument POB is not used here.
-            # 
-            X = sampling._first_one(problem=problem, n_samples=len(ref_dirs))
-            
-        print("Post Sampling", flush=True)
+            n_samples = len(ref_dirs)
+        print(f"Sampling {sampling_type} with {n_samples} samples", flush=True)
+        if (sampling_type == "custom_random"):
+            X = sampling._first_one(problem=problem, n_samples=n_samples)
+        elif (sampling_type in ["all_knowledge", "con_knowledge", "mod_knowledge", "dem_knowledge", "random"]):
+            X = sampling._do(problem=problem, n_samples=n_samples)
+        else:
+            sys.error(f"Sampling type {sampling_type} not implemented")
+
+        # if (X.shape[0] < n_samples):
+        #     sys.error(f"Sampling type {sampling_type} returned {X.shape[0]} samples, expected {n_samples}")
+        # if (algorithm_choice == "NSGA2"):
+        #     X = sampling._first_one(problem=problem, n_samples=MU)
+
+        # else:
+        #     # (algorithm_choice == "MOEAD"):
+        #     # ndim => number of objectives == 3
+        #     if (type_reference == "uniform"):
+        #         # n_dim, n_partitions
+        #         ref_dirs = get_reference_directions(type_reference, n_dim=NUMBER_OBJECTIVES, n_partitions=n_p, seed=SEED)
+                
+        #     else:
+        #         # (type_reference == "energy"):
+        #         # n_dim, n_points
+        #         ref_dirs = get_reference_directions(type_reference, n_dim=NUMBER_OBJECTIVES, n_points=n_p, seed=SEED)
+
+        #     # Thinking that maybe is the size of the sampling is less than the population size
+        #     # This implementation takes pop_size the len of ref_dirs, that is the combination
+        #     # of n_p over n_dim, therefore the argument POB is not used here.
+        #     # 
+        #     X = sampling._first_one(problem=problem, n_samples=len(ref_dirs))
+           
+        print(f"Post Sampling X.shape: {X.shape}", flush=True)
         # counter = 0
         # if (algorithm_choice != "RS"):
         #     for indv in df_new_individuals.itertuples():
@@ -1002,18 +1057,43 @@ if __name__ == "__main__":
         print("Pre Population", flush=True)
         pop = Population.new("X", X)
         print("\t pase la creación de vectors, pasaré a evaluar")
+        import pickle
         Evaluator().eval(problem, pop)
+        with open(results_path + 'population-'+filename +".pkl", 'wb') as f:
+            print("Saving First population to pickle", flush=True)
+            pickle.dump(pop, f)
+        print("Population evaluated", flush=True)
+        print("\tPost Population pop.shape", pop.shape, flush=True)
+
+        # import pickle
+        # with open(results_path + 'population-'+filename +".pkl", 'wb') as f:
+        #     print("Saving population to pickle", flush=True)
+        #     pickle.dump(pop, f)
         print("Post Population", flush=True)
         # Type of mutations
         print("Pre Mutation First", flush=True)
         if(type_mutation == "MULTIFLIP"):
             mutation = BitflipMutation(prob_var=MUFLIP)
+        elif(type_mutation == "SWAP"):
+            mutation = SwapMutation(prob=MUFLIP)
         elif (type_mutation == "MULTIMODALIDAD"):
             mutation = MultimodalMutation(G, dict_of_search_space_u_v,dict_of_search_space_uvk_to_pos,LEN_SEARCH_SPACE,prob_var=MUFLIP)
         elif (type_mutation in "CONNECTIVITY_PROB_DIVIDED" ):
             mutation = ConnectivityMutationProbabilityDivided(G, dict_of_search_space_u_v,dict_of_search_space_uvk_to_pos,LEN_SEARCH_SPACE,prob_var=MUFLIP)
         elif (type_mutation == "MUTUSAGE_FLIP"):
             mutation = AttentionUseMutationFlip(G, dict_of_search_space_u_v,dict_of_search_space_uvk_to_pos,LEN_SEARCH_SPACE,weight_metric=TIME_WEIGHT, pair_list=LIST_PAIR_OD, prob_var=MUFLIP)
+        elif (type_mutation == "GRL_MOD"):
+            mutation = GraphLocalActionMatchedRandomMutation_Multimodal(G, dict_of_search_space_u_v,dict_of_search_space_uvk_to_pos,LEN_SEARCH_SPACE,prob_var=MUFLIP)
+        elif (type_mutation == "GRL_DEM"):
+            mutation = GraphLocalActionMatchedRandomMutation_Demand(G, dict_of_search_space_u_v,dict_of_search_space_uvk_to_pos,LEN_SEARCH_SPACE,weight_metric=TIME_WEIGHT, pair_list=LIST_PAIR_OD, prob_var=MUFLIP)
+        elif (type_mutation == "GRL_CON"):
+            mutation = GraphLocalActionMatchedRandomMutation_Connectivity(G, dict_of_search_space_u_v,dict_of_search_space_uvk_to_pos,LEN_SEARCH_SPACE,prob_var=MUFLIP)
+        elif (type_mutation == "MBF_MOD_DEM_CON"):
+            mut_MOD = MultimodalMutation(G, dict_of_search_space_u_v,dict_of_search_space_uvk_to_pos,LEN_SEARCH_SPACE,prob_var=MUFLIP)
+            mut_DEM = AttentionUseMutationFlip(G, dict_of_search_space_u_v,dict_of_search_space_uvk_to_pos,LEN_SEARCH_SPACE,weight_metric=TIME_WEIGHT, pair_list=LIST_PAIR_OD, prob_var=MUFLIP)
+            mut_CON = ConnectivityMutationProbabilityDivided(G, dict_of_search_space_u_v,dict_of_search_space_uvk_to_pos,LEN_SEARCH_SPACE,prob_var=MUFLIP)
+            mut_MBF = BitflipMutation(prob_var=MUFLIP)
+            mutation = CombinatedMutation([(mut_MOD, 0.3), (mut_DEM, 0.3), (mut_CON, 0.3), (mut_MBF, 0.1)], verbose=True, seed=SEED)
         else: # (type_mutation == "MUT_USAGE"): 
             raise("Not Implemented")
         
@@ -1098,7 +1178,7 @@ if __name__ == "__main__":
 
         print("fin de Main\n",flush=True)
         end_time_stamp = time.time() 
-        print('\n\nProcessed population {} in NGEN {} in {} seconds. CXPB {} MUFLIP {} CPUS {} algorithm {}\n'.format(MU,NGEN,float(end_time_stamp-start_time_stamp),CXPB, MUFLIP,cpus,algorithm_choice))
+        print('\n\nProcessed population {} in NGEN {} in {} seconds. CXPB {} MUFLIP {} CPUS {} algorithm {} sampling_type{}\n'.format(MU,NGEN,float(end_time_stamp-start_time_stamp),CXPB, MUFLIP,cpus,algorithm_choice, sampling_type))
     
     print("\n-----END OF THE JOB-----------\n",flush=True)        
     print("\n-----END OF THE JOB-----------\n",flush=True,file=sys.stderr)    
