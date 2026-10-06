@@ -8,6 +8,64 @@ import networkx as nx
 from pymoo.core.mutation import Mutation
 
 
+def matched_random_mutation(individual: np.ndarray, Xp: np.ndarray) -> np.ndarray:
+    """
+    Matched Random Mutation:
+    - Cuenta cuántos 0->1 y 1->0 hay entre Xp e individual.
+    - Aplica esa misma cantidad de flips, pero en posiciones aleatorias del individuo.
+    
+    Parameters
+    ----------
+    individual : np.ndarray
+        Vector binario (0/1) del individuo actual.
+    Xp : np.ndarray
+        Vector binario (0/1) que representa el cambio de referencia.
+    rng : np.random.Generator
+        Generador de aleatoriedad (p.ej. np.random.default_rng(seed)).
+    
+    Returns
+    -------
+    np.ndarray
+        Nuevo individuo mutado (copia, no modifica el original).
+    """
+
+    original_hamming = np.count_nonzero(Xp != individual)
+
+    # Diferencias por tipo
+    diff_0_1_mask = (Xp == 0) & (individual == 1)  # donde Xp=0, ind=1  -> contamos 1->0 deseados
+    diff_1_0_mask = (Xp == 1) & (individual == 0)  # donde Xp=1, ind=0  -> contamos 0->1 deseados
+
+    n_0_to_1 = np.count_nonzero(diff_1_0_mask)  # número de 0->1 que queremos aplicar
+    n_1_to_0 = np.count_nonzero(diff_0_1_mask)  # número de 1->0 que queremos aplicar
+
+    # Índices disponibles en el individuo
+    idx_0 = np.flatnonzero(individual == 0)
+    idx_1 = np.flatnonzero(individual == 1)
+
+    Xp_new = individual.copy()
+
+    # Aplicar 0 -> 1
+    if n_0_to_1 > 0 and idx_0.size > 0:
+        k = min(n_0_to_1, idx_0.size)
+        chosen = np.random.choice(idx_0, size=k, replace=False)
+        Xp_new[chosen] = 1
+
+    # Aplicar 1 -> 0
+    if n_1_to_0 > 0 and idx_1.size > 0:
+        k = min(n_1_to_0, idx_1.size)
+        chosen = np.random.choice(idx_1, size=k, replace=False)
+        Xp_new[chosen] = 0
+
+        # Distancia de Hamming después de la mutación
+    new_hamming = np.count_nonzero(individual != Xp_new)
+    
+    # Verificar que la distancia de Hamming se preserva
+    assert original_hamming == new_hamming, \
+        f"La distancia de Hamming no se preservó: {original_hamming} -> {new_hamming}"
+    
+    return Xp_new
+
+
 class BitflipMutation(Mutation):
 
     def _do(self, problem, X, **kwargs):
@@ -237,7 +295,7 @@ class ConnectivityMutationProbabilityDivided(Mutation):
             #     # print(data_verify)
             cond = any(pred_es)
             self.precesors_base_array[i] = cond
-        
+        self.prob_var_value = prob_var
         
         
             
@@ -330,8 +388,8 @@ class ConnectivityMutationProbabilityDivided(Mutation):
 
         return np.apply_along_axis(elementwiseDo, 1,X)
 
-class AttentionUseMutationFlip(Mutation):
-    """AttentionUseMutationFlip
+class DemandMutation(Mutation):
+    """DemandMutation
         Calculate the use of each cicleway using "ALL" solution.
         Then, the probability of mutation to one is proportional to the
         use of the edge for the route, previously calculated
@@ -424,65 +482,8 @@ class AttentionUseMutationFlip(Mutation):
 
 
 
-def matched_random_mutation(individual: np.ndarray, Xp: np.ndarray) -> np.ndarray:
-    """
-    Matched Random Mutation:
-    - Cuenta cuántos 0->1 y 1->0 hay entre Xp e individual.
-    - Aplica esa misma cantidad de flips, pero en posiciones aleatorias del individuo.
-    
-    Parameters
-    ----------
-    individual : np.ndarray
-        Vector binario (0/1) del individuo actual.
-    Xp : np.ndarray
-        Vector binario (0/1) que representa el cambio de referencia.
-    rng : np.random.Generator
-        Generador de aleatoriedad (p.ej. np.random.default_rng(seed)).
-    
-    Returns
-    -------
-    np.ndarray
-        Nuevo individuo mutado (copia, no modifica el original).
-    """
-
-    original_hamming = np.count_nonzero(Xp != individual)
-
-    # Diferencias por tipo
-    diff_0_1_mask = (Xp == 0) & (individual == 1)  # donde Xp=0, ind=1  -> contamos 1->0 deseados
-    diff_1_0_mask = (Xp == 1) & (individual == 0)  # donde Xp=1, ind=0  -> contamos 0->1 deseados
-
-    n_0_to_1 = np.count_nonzero(diff_1_0_mask)  # número de 0->1 que queremos aplicar
-    n_1_to_0 = np.count_nonzero(diff_0_1_mask)  # número de 1->0 que queremos aplicar
-
-    # Índices disponibles en el individuo
-    idx_0 = np.flatnonzero(individual == 0)
-    idx_1 = np.flatnonzero(individual == 1)
-
-    Xp_new = individual.copy()
-
-    # Aplicar 0 -> 1
-    if n_0_to_1 > 0 and idx_0.size > 0:
-        k = min(n_0_to_1, idx_0.size)
-        chosen = np.random.choice(idx_0, size=k, replace=False)
-        Xp_new[chosen] = 1
-
-    # Aplicar 1 -> 0
-    if n_1_to_0 > 0 and idx_1.size > 0:
-        k = min(n_1_to_0, idx_1.size)
-        chosen = np.random.choice(idx_1, size=k, replace=False)
-        Xp_new[chosen] = 0
-
-        # Distancia de Hamming después de la mutación
-    new_hamming = np.count_nonzero(individual != Xp_new)
-    
-    # Verificar que la distancia de Hamming se preserva
-    assert original_hamming == new_hamming, \
-        f"La distancia de Hamming no se preservó: {original_hamming} -> {new_hamming}"
-    
-    return Xp_new
-
-class GraphLocalActionMatchedRandomMutation_Connectivity(ConnectivityMutationProbabilityDivided):
-    """GraphLocalActionMatchedRandomMutation_Connectivity
+class ActionMatchedRandomMutation_Connectivity(ConnectivityMutationProbabilityDivided):
+    """ActionMatchedRandomMutation_Connectivity
         Hamming Distance mutation using the information of ConnectivityMutation
     """
     # __init__ from ConnectivityMutationProbabilityDivided
@@ -602,8 +603,8 @@ class GraphLocalActionMatchedRandomMutation_Connectivity(ConnectivityMutationPro
         return np.apply_along_axis(elementwiseDo, 1,X)
 
 
-class GraphLocalActionMatchedRandomMutation_Demand(AttentionUseMutationFlip):
-    """GraphLocalActionMatchedRandomMutation_Demand
+class ActionMatchedRandomMutation_Demand(DemandMutation):
+    """ActionMatchedRandomMutation_Demand
         Hamming Distance mutation using the information of DemandMutation
     """    
     def _do(self, problem, X, **kwargs):
@@ -637,8 +638,8 @@ class GraphLocalActionMatchedRandomMutation_Demand(AttentionUseMutationFlip):
 
         return np.apply_along_axis(elementwiseDo, 1,X)
 
-class GraphLocalActionMatchedRandomMutation_Multimodal(MultimodalMutation):
-    """GraphLocalActionMatchedRandomMutation_Multimodal
+class ActionMatchedRandomMutation_Multimodal(MultimodalMutation):
+    """ActionMatchedRandomMutation_Multimodal
         Hamming Distance mutation using the information of MultimodalMutation
     """
     def _do(self, problem, X, **kwargs):
@@ -738,7 +739,7 @@ class CombinatedMutation(Mutation):
     CombinatedMutation:
         Depending of a probability, it uses one of the following mutations:
             - ConnectivityMutationProbabilityDivided
-            - AttentionUseMutationFlip
+            - DemandMutation
             - MultimodalMutation
     The mutation operators are passed as a list of tuples (mutation_instance, probability),
     and should be already initialized with their specific parameters.
@@ -746,7 +747,7 @@ class CombinatedMutation(Mutation):
     Example:
     --------
     >>> conn_mut = ConnectivityMutationProbabilityDivided(graph=G, ...)
-    >>> attention_mut = AttentionUseMutationFlip(graph=G, pair_list=pairs, ...)
+    >>> demand_mut = DemandMutation(graph=G, pair_list=pairs, ...)
     >>> multimodal_mut = MultimodalMutation(graph=G, ...)
     >>> 
     >>> combinated_mut = CombinatedMutation([
@@ -805,8 +806,6 @@ class CombinatedMutation(Mutation):
 
 
 
-
-import pickle
 class SwapMutation(Mutation):
     """
     SwapMutation:
@@ -829,24 +828,3 @@ class SwapMutation(Mutation):
                 assert ((hamming_distance == 2) or (hamming_distance == 0)), f"Hamming distance should be 2 or 0 after swap, got {hamming_distance}"
             return individual
         return np.apply_along_axis(elementwiseDo, 1, X)
-        # return np.apply_along_axis(elementwiseDo, 1, X)
-        # # with open("swap_mutation_X.pkl", "wb") as f:
-        # #     pickle.dump(X, f)  # Initialize an empty log list
-        # # with open("problem.pkl", "wb") as f:
-        # #             pickle.dump(problem, f)  # Initialize an empty log list
-        # print(f"SHAPE XP: {Xp.shape}")
-        # for k in range(len(Xp)):
-        #     if np.random.rand() < self.prob:
-        #         n_var = Xp.shape[1]
-
-        #         i, j = np.random.choice(n_var, size=2, replace=False)
-        #         Xp[k, i], Xp[k, j] = Xp[k, j], Xp[k, i]
-        #     print(f"SwapMutation: Individual {k} swapped positions {i} and {j}")
-        #     print(f"Before: {Xp[k][i]}, Before: {Xp[k][i]}")
-        #     print(f"After: {X[k][j]}, After: {X[k][j]}")
-        #     hamming_distance = np.count_nonzero(X[k] != Xp[k])
-        #     print(f"Hamming Distance: {hamming_distance}")
-
-        # with open("swap_mutation_Xp.pkl", "wb") as f:
-        #     pickle.dump(Xp, f)  # Initialize an empty log list
-        # return Xp

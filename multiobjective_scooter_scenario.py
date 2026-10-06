@@ -58,12 +58,12 @@ from pymoo.core.population import Population
 from pymoo.operators.mutation.bitflip import BitflipMutation
 from mutation import CombinatedMutation, MultimodalMutation
 from mutation import ConnectivityMutationProbabilityDivided
-from mutation import AttentionUseMutationFlip
+from mutation import DemandMutation
 
 # Baselines
-from mutation import GraphLocalActionMatchedRandomMutation_Connectivity
-from mutation import GraphLocalActionMatchedRandomMutation_Demand
-from mutation import GraphLocalActionMatchedRandomMutation_Multimodal
+from mutation import ActionMatchedRandomMutation_Connectivity
+from mutation import ActionMatchedRandomMutation_Demand
+from mutation import ActionMatchedRandomMutation_Multimodal
 from mutation import SwapMutation
 
 
@@ -734,9 +734,9 @@ if __name__ == "__main__":
 
 
     parser.add_argument("-sampling", type=str, required=False, help="Type of mutation",
-                            choices=["custom_random", "random", "all_knowledge",
+                            choices=["base_init", "random", "all_knowledge",
                                    "con_knowledge", "mod_knowledge", "dem_knowledge"],
-                            default="custom_random")
+                            default="base_init")
 
     # parser.add_argument("-algorithm", "-algo", "-a",
     #                     type=str,
@@ -745,7 +745,9 @@ if __name__ == "__main__":
     #                     help='Choose algorithms between options')
     parser.add_argument("-algorithm", "-algo", "-a",
                         type=str,
-                        choices=['NSGA2', 'nsga2', 'NSGA3', 'nsga3','ParallelMOEAD','MOEAD','moead'],
+                        choices=['NSGA2', 'nsga2', 'NSGA-II', 'nsga-ii',
+                                 'NSGA3', 'nsga3', 'NSGA-III', 'nsga-iii', 'NSGA-3', 'nsga-3',
+                                 'ParallelMOEAD', 'MOEAD', 'moead'],
                         default='NSGA2', required=False,
                         help='Choose algorithms between options')
     
@@ -757,12 +759,12 @@ if __name__ == "__main__":
 
     parser.add_argument("-mut", "-mutation",
                         type=str,
-                        choices=["multiflip","MULTIFLIP","mut_usage","MUT_USAGE",
-                                 "mutusage_flip","MUTUSAGE_FLIP",
-                                 "connectivity","CONNECTIVITY",
-                                 "connectivity_prob_divided_or_flip","CONNECTIVITY_PROB_DIVIDED_OR_FLIP",
-                                 "connectivity_prob_divided","CONNECTIVITY_PROB_DIVIDED",
-                                 "multimodalidad","MULTIMODALIDAD","GRL_MOD", "GRL_DEM", "GRL_CON", "MBF_MOD_DEM_CON", "SWAP"],
+                        choices=["multiflip","MULTIFLIP", "MBF",
+                                 "DEMAND", "Demand", "DEM",
+                                 "CON", "connectivity", "CONNECTIVITY",
+                                 "multimodal","MULTIMODAL", "MOD",
+                                 "AMR_M", "AMR_MOD", "AMR_D", "AMR_DEM", "AMR_C", "AMR_CON",
+                                 "MBF_MOD_DEM_CON", "SWAP"],
                         default='multiflip', required=False,
                         help='Choose algorithms between options')
     parser.add_argument("-suffix", required=False, help="Change suffix folder result")
@@ -954,10 +956,27 @@ if __name__ == "__main__":
     
     MTPB = 1 #Mutation probability
     NDIM = LEN_SEARCH_SPACE # Number of dimension of the individual (=number of gene)
-    algorithm_choice=arguments["algorithm"].upper()
+    algorithm_choice = arguments["algorithm"].upper().replace("-", "")
+    if algorithm_choice == "NSGAII":
+        algorithm_choice = "NSGA2"
+    elif algorithm_choice in ["NSGAIII", "NSGA3"]:
+        algorithm_choice = "NSGA3"
 
     type_mutation = arguments["mut"].upper()
-
+    if type_mutation in ["CON", "CONNECTIVITY"]:
+        type_mutation = "CON"
+    elif type_mutation in ["DEMAND", "DEM"]:
+        type_mutation = "DEM"
+    elif type_mutation in ["MULTIMODAL", "MOD"]:
+        type_mutation = "MOD"
+    elif type_mutation in ["AMR_M", "AMR_MOD"]:
+        type_mutation = "AMR_MOD"
+    elif type_mutation in ["AMR_D", "AMR_DEM"]:
+        type_mutation = "AMR_DEM"
+    elif type_mutation in ["AMR_C", "AMR_CON"]:
+        type_mutation = "AMR_CON"
+    elif type_mutation in ["multiflip","MULTIFLIP", "MBF"]:
+        type_mutation = "MULTIFLIP"
     sampling_type = arguments["sampling"]
     print("Sampling type: {}".format(sampling_type), flush=True)
     # initialize the multiprocessing pool and create the runner
@@ -989,7 +1008,7 @@ if __name__ == "__main__":
         
         print("Pre Sampling - depending of algorithmChoice", flush=True)
         
-        if (sampling_type == "custom_random"):
+        if (sampling_type == "base_init"):
             sampling = BinaryRandomSamplingCustom(df_new_individuals)
         elif (sampling_type == "all_knowledge"):
             sampling = CombinationThreeKnowledgeSampling(df_new_individuals, G, dict_of_search_space_u_v,dict_of_search_space_uvk_to_pos,LEN_SEARCH_SPACE,TIME_WEIGHT, LIST_PAIR_OD)
@@ -1017,9 +1036,9 @@ if __name__ == "__main__":
 
             n_samples = len(ref_dirs)
         print(f"Sampling {sampling_type} with {n_samples} samples", flush=True)
-        if (sampling_type == "custom_random"):
+        if (sampling_type == "base_init"):
             X = sampling._first_one(problem=problem, n_samples=n_samples)
-        elif (sampling_type in ["all_knowledge", "con_knowledge", "mod_knowledge", "dem_knowledge", "random"]):
+        elif (sampling_type in ["all_knowledge", "con_knowledge", "mod_knowledge", "dem_knowledge"]):
             X = sampling._do(problem=problem, n_samples=n_samples)
         else:
             sys.error(f"Sampling type {sampling_type} not implemented")
@@ -1076,25 +1095,25 @@ if __name__ == "__main__":
             mutation = BitflipMutation(prob_var=MUFLIP)
         elif(type_mutation == "SWAP"):
             mutation = SwapMutation(prob=MUFLIP)
-        elif (type_mutation == "MULTIMODALIDAD"):
+        elif (type_mutation == "MOD"):
             mutation = MultimodalMutation(G, dict_of_search_space_u_v,dict_of_search_space_uvk_to_pos,LEN_SEARCH_SPACE,prob_var=MUFLIP)
-        elif (type_mutation in "CONNECTIVITY_PROB_DIVIDED" ):
+        elif (type_mutation == "CON"):
             mutation = ConnectivityMutationProbabilityDivided(G, dict_of_search_space_u_v,dict_of_search_space_uvk_to_pos,LEN_SEARCH_SPACE,prob_var=MUFLIP)
-        elif (type_mutation == "MUTUSAGE_FLIP"):
-            mutation = AttentionUseMutationFlip(G, dict_of_search_space_u_v,dict_of_search_space_uvk_to_pos,LEN_SEARCH_SPACE,weight_metric=TIME_WEIGHT, pair_list=LIST_PAIR_OD, prob_var=MUFLIP)
-        elif (type_mutation == "GRL_MOD"):
-            mutation = GraphLocalActionMatchedRandomMutation_Multimodal(G, dict_of_search_space_u_v,dict_of_search_space_uvk_to_pos,LEN_SEARCH_SPACE,prob_var=MUFLIP)
-        elif (type_mutation == "GRL_DEM"):
-            mutation = GraphLocalActionMatchedRandomMutation_Demand(G, dict_of_search_space_u_v,dict_of_search_space_uvk_to_pos,LEN_SEARCH_SPACE,weight_metric=TIME_WEIGHT, pair_list=LIST_PAIR_OD, prob_var=MUFLIP)
-        elif (type_mutation == "GRL_CON"):
-            mutation = GraphLocalActionMatchedRandomMutation_Connectivity(G, dict_of_search_space_u_v,dict_of_search_space_uvk_to_pos,LEN_SEARCH_SPACE,prob_var=MUFLIP)
+        elif (type_mutation == "DEM"):
+            mutation = DemandMutation(G, dict_of_search_space_u_v,dict_of_search_space_uvk_to_pos,LEN_SEARCH_SPACE,weight_metric=TIME_WEIGHT, pair_list=LIST_PAIR_OD, prob_var=MUFLIP)
+        elif (type_mutation == "AMR_MOD"):
+            mutation = ActionMatchedRandomMutation_Multimodal(G, dict_of_search_space_u_v,dict_of_search_space_uvk_to_pos,LEN_SEARCH_SPACE,prob_var=MUFLIP)
+        elif (type_mutation == "AMR_DEM"):
+            mutation = ActionMatchedRandomMutation_Demand(G, dict_of_search_space_u_v,dict_of_search_space_uvk_to_pos,LEN_SEARCH_SPACE,weight_metric=TIME_WEIGHT, pair_list=LIST_PAIR_OD, prob_var=MUFLIP)
+        elif (type_mutation == "AMR_CON"):
+            mutation = ActionMatchedRandomMutation_Connectivity(G, dict_of_search_space_u_v,dict_of_search_space_uvk_to_pos,LEN_SEARCH_SPACE,prob_var=MUFLIP)
         elif (type_mutation == "MBF_MOD_DEM_CON"):
             mut_MOD = MultimodalMutation(G, dict_of_search_space_u_v,dict_of_search_space_uvk_to_pos,LEN_SEARCH_SPACE,prob_var=MUFLIP)
-            mut_DEM = AttentionUseMutationFlip(G, dict_of_search_space_u_v,dict_of_search_space_uvk_to_pos,LEN_SEARCH_SPACE,weight_metric=TIME_WEIGHT, pair_list=LIST_PAIR_OD, prob_var=MUFLIP)
+            mut_DEM = DemandMutation(G, dict_of_search_space_u_v,dict_of_search_space_uvk_to_pos,LEN_SEARCH_SPACE,weight_metric=TIME_WEIGHT, pair_list=LIST_PAIR_OD, prob_var=MUFLIP)
             mut_CON = ConnectivityMutationProbabilityDivided(G, dict_of_search_space_u_v,dict_of_search_space_uvk_to_pos,LEN_SEARCH_SPACE,prob_var=MUFLIP)
             mut_MBF = BitflipMutation(prob_var=MUFLIP)
             mutation = CombinatedMutation([(mut_MOD, 0.3), (mut_DEM, 0.3), (mut_CON, 0.3), (mut_MBF, 0.1)], verbose=True, seed=SEED)
-        else: # (type_mutation == "MUT_USAGE"): 
+        else:
             raise("Not Implemented")
         
         print("Post Mutation First", flush=True)
@@ -1178,41 +1197,9 @@ if __name__ == "__main__":
 
         print("fin de Main\n",flush=True)
         end_time_stamp = time.time() 
-        print('\n\nProcessed population {} in NGEN {} in {} seconds. CXPB {} MUFLIP {} CPUS {} algorithm {} sampling_type{}\n'.format(MU,NGEN,float(end_time_stamp-start_time_stamp),CXPB, MUFLIP,cpus,algorithm_choice, sampling_type))
+        print('\n\nProcessed population {} in NGEN {} in {} seconds. P_C {} P_M {} CPUS {} algorithm {} sampling_type {} mutation_type {}\n'.format(n_samples,NGEN,float(end_time_stamp-start_time_stamp),CXPB, MUFLIP,cpus,algorithm_choice, sampling_type, type_mutation))
     
     print("\n-----END OF THE JOB-----------\n",flush=True)        
     print("\n-----END OF THE JOB-----------\n",flush=True,file=sys.stderr)    
 
 
-
-
-
-# for ind in df_result_load["Individuo"].items():
-#     asa = eval(ind[1])
-#     print(evaluation(asa))
-#     break
-
-
-
-#################################################################################################
-## OTHTER TESTINGS
-# ref_dirs = get_reference_directions("uniform", 2, n_partitions=12)
-
-# moead= MOEAD(
-#     ref_dirs,
-#     n_neighbors=15,
-#     sampling=BinaryRandomSampling(),
-#     prob_neighbor_mating=0.7,
-# )
-
-
-#   # assign a PSO with default hyper params
-
-# pso_ele_res = minimize(
-#     mc_cor_ele, 
-#     nsga2, 
-#     seed=SEED, 
-#     verbose=False
-#     )
-
-# print("Best solution: \nX = %s\nF = %s" % (pso_ele_res.X.astype(int), pso_ele_res.F))

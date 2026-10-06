@@ -6,10 +6,10 @@ import osmnx as ox
 import networkx as nx
 
 from pymoo.core.mutation import Mutation
-from mutation import MultimodalMutation, ConnectivityMutationProbabilityDivided, AttentionUseMutationFlip
+from mutation import MultimodalMutation, ConnectivityMutationProbabilityDivided, DemandMutation
 
 class KnowledgeMOD(MultimodalMutation):
-    """MultimodalMutation
+    """KnowledgeMOD
         Consider the edge that gives access to public system as well as other cicleway as 1,
         other it is a probability if it changes
     """
@@ -104,13 +104,12 @@ class KnowledgeMOD(MultimodalMutation):
 
 
 class KnowledgeCON(ConnectivityMutationProbabilityDivided):
-    """ConnectivityMutationProbabilityDivided
+    """KnowledgeCON
         Depending of a probability,
                 If there is a full adjency (predecessor and succesor) for edge and prob<0.9, It mutates to one .
                 If there no adjency for edge and prob<0.9, It mutates to zero .
                 If there is a partial adjency and prob<0.6, It mutate to one
-                If there proba<0.3, flip
-                Otherwise, keep the same
+                Otherwise, flip
     """
     
     def _do(self, problem, X, prob_var, **kwargs):
@@ -205,8 +204,8 @@ class KnowledgeCON(ConnectivityMutationProbabilityDivided):
 
 
 
-class KnowledgeDEM(AttentionUseMutationFlip):
-    """AttentionUseMutationFlip
+class KnowledgeDEM(DemandMutation):
+    """KnowledgeDEM
         Calculate the use of each cicleway using "ALL" solution.
         Then, the probability of mutation to one is proportional to the
         use of the edge for the route, previously calculated
