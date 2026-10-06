@@ -1,6 +1,6 @@
 # Infrastructure Redesigning
 
-Source code for multi-objective optimization of e-scooter infrastructure using evolutionary algorithms.
+Source code for Multiobjective Optimization of E-scooter Infrastructure using Evolutionary Algorithms.
 
 ## Requirements
 
@@ -33,7 +33,7 @@ conda activate <environment_name>
 
 ```bash
 apptainer exec e-scooter.sif python multiobjective_scooter_scenario.py \
-  -seed <SEED> \
+  -s <SEED> \
   -pc <PROB_CROSS> \
   -pm <PROB_FLIP> \
   -POB <POPULATION> \
@@ -41,10 +41,10 @@ apptainer exec e-scooter.sif python multiobjective_scooter_scenario.py \
   -CPUS <NUM_CPUS> \
   -a <ALGORITHM> \
   -f <FILE_SPECIAL_INDIVIDUALS> \
-  -m <CITY_MAP> \
+  -m <SCENARIO> \
   -mut <MUTATION_TYPE> \
   -sampling <INITIALIZATION_TYPE> \
-  -sif <SCENARIO_NAME>
+  -suffix <RESULTS_SUFFIX>
 ```
 
 ### Using an arguments file
@@ -59,7 +59,7 @@ apptainer exec e-scooter.sif python multiobjective_scooter_scenario.py @argument
 
 ```bash
 python multiobjective_scooter_scenario.py \
-  -seed <SEED> \
+  -s <SEED> \
   -pc <PROB_CROSS> \
   -pm <PROB_FLIP> \
   -POB <POPULATION> \
@@ -67,28 +67,28 @@ python multiobjective_scooter_scenario.py \
   -CPUS <NUM_CPUS> \
   -a <ALGORITHM> \
   -f <FILE_SPECIAL_INDIVIDUALS> \
-  -m <CITY_MAP> \
+  -m <SCENARIO> \
   -mut <MUTATION_TYPE> \
   -sampling <INITIALIZATION_TYPE> \
-  -sif <SCENARIO_NAME>
+  -suffix <RESULTS_SUFFIX>
 ```
 
 ## Arguments
 
 | Argument | Description | Type | Valid values |
 |---|---|---|---|
-| `-seed` | Random seed for reproducibility | INT | Any integer |
+| `-s` | Random seed for reproducibility | INT | Any integer |
 | `-pc` | Crossover probability | FLOAT | [0, 1] |
-| `-pm` | Mutation probability | FLOAT | [0, 1] |
-| `-POB` | Population size | INT | Any positive integer |
-| `-GEN` | Number of generations | INT | Any positive integer |
-| `-CPUS` | Number of CPUs to use | INT | Any positive integer |
-| `-a` | Algorithm to run | STRING | `NSGA-II`, `NSGA-III` |
-| `-f` | File with special individuals for initialization | PATH | CSV file path |
-| `-m` | City map file | PATH | `.gpkg` file path |
-| `-mut` | Mutation type | STRING | e.g., `polynomial`, `bitflip` |
-| `-sampling` | Initialization type | STRING | e.g., `random`, `latin_hypercube` |
-| `-sif` | Scenario name, used to create a control subfolder | STRING | Any string |
+| `-pm` | Mutation probability for each bit | FLOAT | [0, 1] |
+| `-POB` | Population size | INT | Positive integer |
+| `-GEN` | Number of generations | INT | Positive integer |
+| `-CPUS` | Number of worker processes | INT | Positive integer |
+| `-a` | Algorithm to run | STRING | `NSGA-II`, `NSGA-II`|
+| `-f` | File with initial individuals | PATH | CSV file path or omitted |
+| `-m` | Scenario and input data set | STRING | `Malaga`, `Melilla` |
+| `-mut` | Mutation type | STRING | `MBF`, `DEM`, `CON`, `MOD`, `AMR_M`, `AMR_D`, `AMR_C` |
+| `-sampling` | Initialization type | STRING | `base_init`, `con_knowledge`, `mod_knowledge`, `dem_knowledge` |
+| `-suffix` | Suffix for the results directory | STRING | Any string or omitted |
 
 ### Additional arguments
 
@@ -96,8 +96,8 @@ python multiobjective_scooter_scenario.py \
 |---|---|---|---|
 | `-show_ind` | Show individuals | FLAG | Present or absent |
 | `-v` | Verbose output / show individuals | FLAG | Present or absent |
-| `-type_reference` | Reference direction type | STRING | e.g., `uniform`, `das_dennis` |
-| `-np` | Number of points or partitions, depending on the reference direction | FLOAT | Positive number |
+| `-type_reference` | Reference direction type | STRING | `das-dennis`, `energy` |
+| `-np` | Number of points or partitions, depending on the reference direction | INT | Positive integer |
 | `-prob_neighbor_mating` | Probability of neighbor mating | FLOAT | [0, 1] |
 | `-n_neighbors` | Number of neighbors | INT | Positive integer |
 
@@ -129,7 +129,7 @@ python multiobjective_scooter_scenario.py \
 
 Input data files are available at:
 
-[Download data folder](https://uma365-my.sharepoint.com/:f:/g/personal/pedroza_uma_es/EveivO1mkrZAhhc7Dqu7k_oBg0Kl-a9_M1fkasqlM9eHew?e=DxSoog)
+[Download data folder](https://uma365-my.sharepoint.com/:f:/g/personal/pedroza_uma_es/IgB8ItAJ4ghNSo1taveje00bAZiUAEZ0Kic77_HkTH4Mn3Y?e=dOQEJ2)
 
 ## Example
 
@@ -137,7 +137,11 @@ Example argument configurations can be found in `arguments.txt`.
 
 ## Expected Output
 
-After a successful run, the results are saved in a subfolder named after the `-sif` scenario argument. This folder contains the Pareto front and the fitness values of the population in the last generation. If `-v` is present, the record for each generation will also be available. If `-show_ind` is present, all output files will include the individuals, except for the Pareto front.
+After a successful run, results are saved under `results/<SCENARIO>/`, with an
+additional subfolder when `-suffix` is provided. This folder contains the
+Pareto front and the fitness values of the population in the last generation.
+If `-v` is present, the record for each generation will also be available. If
+`-show_ind` is present, generation output files will include the individuals.
 
 Execution logs are written to `stdout` and `stderr`, respectively.
 
