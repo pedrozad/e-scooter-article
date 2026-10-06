@@ -165,6 +165,8 @@ If you use this code or data in your research, please cite the associated paper:
 
 ## License
 
-This project is licensed under the [MIT License](LICENSE).
+- Code: MIT License
+- Map data: © OpenStreetMap contributors, [ODbL 1.0](https://www.openstreetmap.org/copyright)
+- Other data: MIT License
 
 
